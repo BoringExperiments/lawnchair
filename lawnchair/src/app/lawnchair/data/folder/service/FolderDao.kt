@@ -16,47 +16,63 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface FolderDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFolder(folder: FolderInfoEntity)
+    suspend fun insertFolder(folder: FolderInfoEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFolderItems(items: List<FolderItemEntity>)
 
-    @Query("SELECT * FROM Folders WHERE id = :folderId")
-    @Transaction
-    suspend fun getFolderWithItems(folderId: Int): FolderWithItems?
+    @Query("SELECT id FROM Folders ORDER BY rank ASC")
+    suspend fun getAllFolderIds(): List<Int>
 
-    @Query("SELECT * FROM FolderItems WHERE folderId IS NOT :folderId")
+    @Query("SELECT * FROM Folders ORDER BY rank ASC")
     @Transaction
-    suspend fun getItems(folderId: Int): List<FolderItemEntity>
+    fun getAllFoldersWithItems(): Flow<List<FolderWithItems>>
 
-    @Query("SELECT * FROM Folders")
-    fun getAllFolders(): Flow<List<FolderInfoEntity>>
-
-    @Transaction
-    suspend fun insertFolderWithItems(folder: FolderInfoEntity, items: List<FolderItemEntity>) {
-        insertFolder(folder)
-        insertFolderItems(items)
-    }
+    @Query("SELECT MAX(rank) FROM Folders")
+    suspend fun getMaxFolderRank(): Int?
 
     @Query("DELETE FROM FolderItems WHERE folderId = :folderId")
     suspend fun deleteFolderItemsByFolderId(folderId: Int)
 
+    @Query("UPDATE Folders SET title = :title, timestamp = :timestamp WHERE id = :id")
+    suspend fun updateFolderTitle(id: Int, title: String, timestamp: Long = System.currentTimeMillis())
+
+    @Transaction
+    suspend fun replaceFolderItems(folderId: Int, title: String, items: List<FolderItemEntity>) {
+        updateFolderTitle(folderId, title)
+        deleteFolderItemsByFolderId(folderId)
+        insertFolderItems(items.map { it.copy(folderId = folderId) })
+    }
+
     @Query(
         value = """
                 UPDATE Folders
-                SET title = :newTitle, hide = :hide, timestamp = :timestamp
+                SET hide = :hide, timestamp = :timestamp
                 WHERE id = :folderId
             """,
     )
-    suspend fun updateFolderInfo(
+    suspend fun setFolderHidden(
         folderId: Int,
-        newTitle: String,
         hide: Boolean,
         timestamp: Long = System.currentTimeMillis(),
     )
 
     @Query("DELETE FROM Folders WHERE id = :folderId")
     suspend fun deleteFolder(folderId: Int)
+
+    @Query("UPDATE Folders SET rank = :rank WHERE id = :id")
+    suspend fun updateFolderRank(id: Int, rank: Int)
+
+    @Transaction
+    suspend fun updateFolderRanks(orderedIds: List<Int>) {
+        val currentIds = getAllFolderIds().toSet()
+        if (orderedIds.size != currentIds.size || orderedIds.toSet() != currentIds) {
+            return
+        }
+        orderedIds.forEachIndexed { index, id ->
+            updateFolderRank(id, index)
+        }
+    }
 
     @RawQuery
     suspend fun checkpoint(supportSQLiteQuery: SupportSQLiteQuery): Int

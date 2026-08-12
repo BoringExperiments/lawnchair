@@ -123,6 +123,8 @@
     <string name="x_and_y">%1$s e %2$s</string>
     <string name="advanced">Avanzate</string>
     <!-- Draggable -->
+    <string name="reorderable_move_up">Move up</string>
+    <string name="reorderable_move_down">Move down</string>
     <string name="reorderable_active_items">Elementi attivi</string>
     <string name="reorderable_disabled_items">Altri elementi</string>
     <string name="reorderable_disabled_hint">Disabled items will appear here</string>
@@ -135,9 +137,11 @@
     <string name="settings">Impostazioni</string>
     <string name="general_label">Generale</string>
     <string name="general_description">Colori, pacchetti icone, punti di notifica</string>
-    <string name="home_screen_label">Schermata Home</string>
+    <string name="home_screen_label">Schermata Home
+</string>
     <string name="home_screen_description">Feed, griglia, icone</string>
-    <string name="home_screen_actions">Azioni della schermata Home</string>
+    <string name="home_screen_actions">Azioni della schermata Home
+</string>
     <string name="dock_label">Dock</string>
     <string name="dock_description">Barra di ricerca, numero d\'icone</string>
     <string name="app_drawer_label">Menu delle app</string>
@@ -180,6 +184,11 @@
     <string name="gesturenavcontract_label">Usa l\'API GestureNavContract</string>
     <string name="gesturenavcontract_description">Support Android\'s enhanced animations when using gesture navigation</string>
     <string name="gesturenavcontract_warning_incompatibility">Your device isn\'t fully supported. This may cause visual issue for some animations.</string>
+    <string name="vibration_feedback_level_label">Vibration feedback level</string>
+    <string name="vibration_feedback_no_feedback_choice">Nessuno</string>
+    <string name="vibration_feedback_minimal_choice">Minimal</string>
+    <string name="vibration_feedback_default_choice">Predefinito</string>
+    <string name="vibration_feedback_expressive_choice">Espressivo</string>
     <string name="recents_lock_unlock">App locking</string>
     <string name="recents_lock_unlock_description">Prevent the selected app from closing when you tap \"Clear all\"</string>
     <!--Overlay-->
@@ -286,7 +295,7 @@
     <string name="themed_icon_pack_tint">Tinta con colore in evidenza</string>
     <string name="system_icons">Icone di sistema</string>
     <string name="force_monochrome_label">Forza monocromatico</string>
-    <string name="force_monochrome_description">Recolor unsupported apps with the current accent color. Requires restart.</string>
+    <string name="force_monochrome_description">Recolor unsupported apps with the current accent color.</string>
     <string name="themed_icon_title">Icone a tema</string>
     <string name="themed_icons_off_label">Disattivate</string>
     <string name="themed_icons_home_label">Schermata Home</string>
@@ -453,8 +462,19 @@
     <string name="backup_restore_success">Backup ripristinato</string>
     <string name="backup_restore_error">Ripristino del backup non riuscito</string>
     <string name="invalid_backup_file">File di backup non valido</string>
+    <string name="restore_nova_backup">Restore Nova backup</string>
+    <string name="invalid_nova_backup_file">Invalid Nova backup file</string>
+    <string name="nova_grid_label">Griglia</string>
+    <string name="nova_grid_value">%1$d × %2$d</string>
+    <string name="nova_dock_label">Dock</string>
+    <string name="nova_app_label">Apps</string>
+    <string name="nova_widget_label">Widgets</string>
+    <string name="nova_folder_label">Cartelle</string>
+    <string name="nova_shortcut_label">Scorciatoie</string>
+    <string name="nova_icon_pack_label">Pacchetto icone</string>
     <string name="create_backup_description">Esporta impostazioni e layout del launcher</string>
     <string name="restore_backup_description">Importa un backup creato in passato</string>
+    <string name="restore_nova_backup_description">Import layout from a Nova Launcher backup</string>
     <!--
 
     Gesture settings
@@ -520,6 +540,8 @@
     <string name="home_screen_rotation_description">Allow home screen rotation when the device is rotated</string>
     <string name="auto_updater_label">Automatically check for updates</string>
     <string name="auto_updater_description">Checks for Nightly updates when opening the About screen</string>
+    <string name="live_information_label">Live information</string>
+    <string name="live_information_description">Displays announcement, and set the default feature flags</string>
     <string name="wallpaper_blur">Sfoca lo sfondo (sperimentale)</string>
     <string name="wallpaper_background_blur">Intensità della sfocatura</string>
     <string name="wallpaper_background_blur_factor">Soglia del fattore</string>
@@ -604,6 +626,8 @@
     <string name="paused_apps_drop_target_label">Sospendi app</string>
     <string name="open_in_store_drop_target_label">Open in store</string>
     <string name="dock_icons">Icone della dock</string>
+    <string name="dock_rows">Dock rows</string>
+    <string name="dock_pages">Dock pages</string>
     <string name="state_folded">%1$s (folded)</string>
     <string name="state_unfolded">%1$s (unfolded)</string>
     <string name="folded_label">Folded</string>

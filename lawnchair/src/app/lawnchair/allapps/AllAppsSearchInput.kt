@@ -1,6 +1,7 @@
 package app.lawnchair.allapps
 
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
@@ -12,10 +13,14 @@ import android.text.method.TextKeyListener
 import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.ViewTreeObserver
+import android.view.ViewTreeObserver.OnGlobalFocusChangeListener
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.TextView
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.view.ViewCompat
+import androidx.core.view.isGone
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.widget.addTextChangedListener
@@ -92,6 +98,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
     private lateinit var appsView: ActivityAllAppsContainerView<*>
     private var searchAlgorithm: LawnchairSearchAlgorithm? = null
 
+    private var isDirectFocus = false
     private var focusedResultTitle = ""
     private var canShowHint = false
     private var queryEmpty by mutableStateOf(true)
@@ -110,6 +117,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
 
     private var initialPaddingLeft: Int = 0
     private var initialPaddingRight: Int = 0
+    private var hideSearchBar = false
 
     override fun onFinishInflate() {
         super.onFinishInflate()
@@ -127,6 +135,26 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
 
             setContent {
+                var isFocused by remember(input) { mutableStateOf(input.hasFocus()) }
+
+                // Yes, this is a bit hacky, but it's the only way to ensure that
+                // we can check if the input has focus in Compose without wrestling
+                // with multiple global variables or state changes
+                DisposableEffect(input) {
+                    val focusListener = OnGlobalFocusChangeListener { _, _ ->
+                        isFocused = input.hasFocus()
+                    }
+
+                    val observer = input.viewTreeObserver
+                    observer.addOnGlobalFocusChangeListener(focusListener)
+
+                    onDispose {
+                        if (observer.isAlive) {
+                            observer.removeOnGlobalFocusChangeListener(focusListener)
+                        }
+                    }
+                }
+
                 val searchProviderPref by prefs2.hotseatQsbProvider.asState()
                 val searchProvider = remember(searchProviderPref, context) {
                     getSearchProvider(context, searchProviderPref)
@@ -157,12 +185,16 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     ColorTokens.SearchboxHighlight.resolveColor(context)
                 }
 
+                val backgroundAlpha by animateIntAsState(
+                    if (isFocused || !queryEmpty) 0 else 100,
+                )
+
                 // Ignore other theme attributes to preserve existing behavior
                 val style = buildQsbStyle(
                     context = context,
                     themed = themedQsb,
                     backgroundColor = backgroundColor,
-                    backgroundAlpha = (bgAlphaState * 100).toInt(),
+                    backgroundAlpha = backgroundAlpha,
                     cornerRadius = 1f,
                     strokeColor = null,
                     strokeWidth = 0f,
@@ -170,6 +202,9 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
 
                 val actions = QsbActions(
                     onQsbClick = {
+                        if (input.text.isNullOrEmpty()) {
+                            searchAlgorithm?.doZeroStateSearch(this@AllAppsSearchInput)
+                        }
                         input.requestFocus()
                         input.showKeyboard()
                     },
@@ -215,6 +250,15 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
         val currentPaddingLeft = initialPaddingLeft
         val currentPaddingRight = initialPaddingRight
 
+        // Activate zero search on tap
+        @SuppressLint("ClickableViewAccessibility")
+        input.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_DOWN && !input.hasFocus()) {
+                setDirectFocus(true)
+            }
+            false
+        }
+
         input.onFocusChangeListener = { _, hasFocus ->
             if (hasFocus) {
                 if (prefs2.searchAlgorithm.firstCached() != LawnchairSearchAlgorithm.APP_SEARCH) {
@@ -223,16 +267,14 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     input.setHint(R.string.all_apps_search_bar_hint)
                 }
 
-                if (input.text.toString().isEmpty()) {
+                if (input.text.toString().isEmpty() && isDirectFocus) {
                     searchAlgorithm?.doZeroStateSearch(this)
+                    setDirectFocus(false)
                 }
 
                 setBackgroundVisibility(false, 0f)
                 animateHintVisibility(true)
                 animatePadding(currentPaddingLeft / 2, currentPaddingRight / 2)
-
-                // Sometimes the user has to click the input bar one more time
-                // for the keyboard to show.
             } else {
                 setBackgroundVisibility(true, 1f)
                 animateHintVisibility(false)
@@ -241,7 +283,9 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     suggestionsRecent.saveRecentQuery(query, null)
                 }
 
-                animatePadding(currentPaddingLeft, currentPaddingRight)
+                if (input.text.isNullOrEmpty()) {
+                    animatePadding(currentPaddingLeft, currentPaddingRight)
+                }
                 focusedResultTitle = ""
                 input.setHint("")
                 hint.text = ""
@@ -258,7 +302,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
             },
             afterTextChanged = {
                 updateHint()
-                if (input.text.isNullOrEmpty()) {
+                if (input.text.isNullOrEmpty() && input.hasFocus() && !input.isResetting) {
                     searchAlgorithm?.doZeroStateSearch(this)
                 }
                 if (input.text.toString() == "/lawnchairdebug") {
@@ -267,13 +311,18 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
                     launcher.stateManager.goToState(LauncherState.NORMAL)
                 }
 
-                queryEmpty = it.isNullOrEmpty()
+                val isEmpty = it.isNullOrEmpty()
+                if (isEmpty && !input.hasFocus()) {
+                    animatePadding(currentPaddingLeft, currentPaddingRight)
+                }
+                queryEmpty = isEmpty
             },
         )
 
-        val hide = prefs2.hideAppDrawerSearchBar.firstCached()
-        if (hide) {
-            isInvisible = true
+        hideSearchBar = prefs2.hideAppDrawerSearchBar.firstCached()
+        if (hideSearchBar) {
+            // GONE so top margin/height do not reserve empty space above the app list.
+            isGone = true
             layoutParams.height = 0
         }
     }
@@ -372,6 +421,7 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
             appsView.appsStore?.removeUpdateListener(this)
         }
         input.viewTreeObserver.removeOnGlobalLayoutListener(this)
+        setDirectFocus(false)
     }
 
     override fun onAppsUpdated() {
@@ -394,6 +444,10 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
 
     override fun resetSearch() {
         searchBarController.reset()
+    }
+
+    override fun setDirectFocus(directFocus: Boolean) {
+        isDirectFocus = directFocus
     }
 
     override fun preDispatchKeyEvent(event: KeyEvent) {
@@ -440,18 +494,18 @@ class AllAppsSearchInput(context: Context, attrs: AttributeSet?) :
 
     override fun setInsets(insets: Rect) {
         (layoutParams as MarginLayoutParams).apply {
-            topMargin = if (isInvisible) {
-                insets.top - allAppsSearchVerticalOffset
-            } else {
-                max(-allAppsSearchVerticalOffset, insets.top - qsbMarginTopAdjusting)
+            topMargin = when {
+                hideSearchBar -> 0
+
+                // Sheet mode already pads the container with status-bar insets; only clear the
+                // drag handle. Re-applying insets.top here created the large empty band under it.
+                launcher.deviceProfile.shouldShowAllAppsOnSheet() ->
+                    resources.getDimensionPixelSize(R.dimen.bottom_sheet_handle_area_height)
+
+                else -> max(-allAppsSearchVerticalOffset, insets.top - qsbMarginTopAdjusting)
             }
         }
         requestLayout()
-    }
-
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        super.onLayout(changed, l, t, r, b)
-        offsetTopAndBottom(allAppsSearchVerticalOffset)
     }
 
     override fun getEditText() = input

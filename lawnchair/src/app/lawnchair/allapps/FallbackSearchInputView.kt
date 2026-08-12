@@ -14,6 +14,8 @@ import com.android.launcher3.allapps.ActivityAllAppsContainerView
 class FallbackSearchInputView(context: Context, attrs: AttributeSet?) : ExtendedEditText(context, attrs) {
 
     private var appsView: ActivityAllAppsContainerView<*>? = null
+    var isResetting = false
+        private set
 
     init {
         val accentColor = ColorTokens.ColorAccent.resolveColor(context)
@@ -22,13 +24,32 @@ class FallbackSearchInputView(context: Context, attrs: AttributeSet?) : Extended
         highlightColor = ColorUtils.setAlphaComponent(accentColor, 82)
     }
 
+    override fun reset() {
+        isResetting = true
+        try {
+            super.reset()
+        } finally {
+            isResetting = false
+        }
+    }
+
     fun initialize(appsView: ActivityAllAppsContainerView<*>?) {
         this.appsView = appsView
     }
 
     override fun hideKeyboard() {
         super.hideKeyboard()
-        this.appsView?.requestFocus()
+        // Prefer the active apps list over appsView itself. appsView has
+        // focusable=false and its search container is focusedByDefault, so
+        // requestFocus() on appsView would re-focus the search field (e.g. when
+        // switching Personal/Work tabs triggers resetSearch).
+        val appsView = this.appsView
+        val activeList = appsView?.activeRecyclerView
+        if (activeList != null) {
+            activeList.requestFocus()
+        } else {
+            appsView?.requestFocus()
+        }
     }
 
     override fun onAttachedToWindow() {
