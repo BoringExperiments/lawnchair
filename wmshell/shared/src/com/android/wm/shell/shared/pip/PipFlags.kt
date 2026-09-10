@@ -31,7 +31,7 @@ class PipFlags {
         val isPip2ExperimentEnabled: Boolean by lazy {
             val isTv = AppGlobals.getPackageManager().hasSystemFeature(
                 PackageManager.FEATURE_LEANBACK, 0)
-            (Flags.enablePip2() || ENABLE_DESKTOP_WINDOWING_PIP.isTrue) && !isTv
+            (Flags.enablePip2() || false) && !isTv
         }
 
         @JvmStatic

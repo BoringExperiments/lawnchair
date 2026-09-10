@@ -1687,11 +1687,12 @@ public abstract class AbsSwipeUpHandler<
             boolean hasValidLeash = runningTaskTarget != null
                     && runningTaskTarget.leash != null
                     && runningTaskTarget.leash.isValid();
-            final boolean swipeUpInDesktopWindowing =
-                    DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP.isTrue()
-                            && runningTaskTarget != null
-                            && runningTaskTarget.taskInfo.getWindowingMode()
-                            == WINDOWING_MODE_FREEFORM;
+//            final boolean swipeUpInDesktopWindowing =
+//                    DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP.isTrue()
+//                            && runningTaskTarget != null
+//                            && runningTaskTarget.taskInfo.getWindowingMode()
+//                            == WINDOWING_MODE_FREEFORM;
+            final boolean swipeUpInDesktopWindowing = false;
             boolean appCanEnterPip = !mDeviceState.isPipActive()
                     && hasValidLeash
                     && runningTaskTarget.allowEnterPip

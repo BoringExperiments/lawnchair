@@ -26,10 +26,12 @@ import android.content.Intent
 import android.content.pm.ShortcutInfo
 import android.graphics.Point
 import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Message
+import android.os.Parcel
 import android.os.RemoteException
 import android.os.Trace
 import android.os.Trace.traceBegin
@@ -211,6 +213,36 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             callback.invoke()
         } catch (e: RemoteException) {
             Log.w(tag, errorMsg.invoke(), e)
+        }
+    }
+
+    private fun startInitialAndroid16RecentsTransition(
+        recentTasks: IRecentTasks,
+        pendingIntent: PendingIntent,
+        intent: Intent?,
+        options: Bundle,
+        listener: IRecentsAnimationRunner,
+    ): Boolean {
+        val data = Parcel.obtain(recentTasks.asBinder())
+        return try {
+            data.writeInterfaceToken(IRecentTasks.DESCRIPTOR)
+            data.writeTypedObject(pendingIntent, 0)
+            data.writeTypedObject(intent, 0)
+            data.writeTypedObject(options, 0)
+            data.writeStrongInterface(context.iApplicationThread)
+            data.writeStrongInterface(listener)
+            recentTasks.asBinder().transact(
+                if (usesNothingOsInitialRecentsTransitionAidl()) {
+                    TRANSACTION_START_RECENTS_TRANSITION_NOTHING_INITIAL
+                } else {
+                    TRANSACTION_START_RECENTS_TRANSITION_AOSP_INITIAL
+                },
+                data,
+                null,
+                IBinder.FLAG_ONEWAY,
+            )
+        } finally {
+            data.recycle()
         }
     }
 
@@ -1271,6 +1303,24 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
         displayId: Int,
     ): Boolean {
         executeWithErrorLog({ "Error starting recents via shell" }) {
+            if (usesInitialAndroid16RecentsTransitionAidl()) {
+                if (wct != null) {
+                    Log.w(TAG, "Android 16 initial does not support WCT-backed recents transitions")
+                    return false
+                }
+                val recentTasks = recentTasks ?: return false
+                return startInitialAndroid16RecentsTransition(
+                    recentTasks,
+                    getRecentsPendingIntent(displayId),
+                    intent,
+                    options.toBundle().apply {
+                        if (useSyntheticRecentsTransition) {
+                            putBoolean("is_synthetic_recents_transition", true)
+                        }
+                    },
+                    RecentsAnimationListenerStub(listener),
+                )
+            }
             recentTasks?.startRecentsTransition(
                 getRecentsPendingIntent(displayId),
                 intent,
@@ -1295,6 +1345,40 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
 
     private class RecentsAnimationListenerStub(val listener: RecentsAnimationListener) :
         IRecentsAnimationRunner.Stub() {
+        override fun onTransact(
+            code: Int,
+            data: Parcel,
+            reply: Parcel?,
+            flags: Int,
+        ): Boolean {
+            if (usesNothingOsInitialRecentsTransitionAidl()
+                    && code == TRANSACTION_ON_ANIMATION_START_WITH_SURFACE_TRANSACTION) {
+                data.enforceInterface(IRecentsAnimationRunner.DESCRIPTOR)
+                val controller = IRecentsAnimationController.Stub.asInterface(
+                    data.readStrongBinder())
+                val transitionInfo = data.readTypedObject(TransitionInfo.CREATOR)
+                val transaction = data.readTypedObject(SurfaceControl.Transaction.CREATOR)
+                val apps = data.createTypedArray(RemoteAnimationTarget.CREATOR)
+                val wallpapers = data.createTypedArray(RemoteAnimationTarget.CREATOR)
+                val homeContentInsets = data.readTypedObject(Rect.CREATOR)
+                val minimizedHomeBounds = data.readTypedObject(Rect.CREATOR)
+                val extras = data.readTypedObject(Bundle.CREATOR)
+                data.enforceNoDataAvail()
+                transaction?.apply()
+                onAnimationStart(
+                    controller,
+                    apps,
+                    wallpapers,
+                    homeContentInsets,
+                    minimizedHomeBounds,
+                    extras,
+                    transitionInfo,
+                )
+                return true
+            }
+            return super.onTransact(code, data, reply, flags)
+        }
+
         override fun onAnimationStart(
             controller: IRecentsAnimationController,
             apps: Array<RemoteAnimationTarget>?,
@@ -1396,6 +1480,23 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
 
     companion object {
         private const val TAG = "SystemUiProxy"
+        private const val TRANSACTION_START_RECENTS_TRANSITION_AOSP_INITIAL =
+            IBinder.FIRST_CALL_TRANSACTION + 4
+        private const val TRANSACTION_START_RECENTS_TRANSITION_NOTHING_INITIAL =
+            IBinder.FIRST_CALL_TRANSACTION + 5
+        private const val TRANSACTION_ON_ANIMATION_START_WITH_SURFACE_TRANSACTION =
+            IBinder.FIRST_CALL_TRANSACTION + 4
+        private const val ANDROID_16_INITIAL_BUILD_PREFIX = "BP2A."
+
+        private fun usesInitialAndroid16RecentsTransitionAidl(): Boolean {
+            return Build.VERSION.SDK_INT == Build.VERSION_CODES.BAKLAVA
+                    && Build.FINGERPRINT.contains(ANDROID_16_INITIAL_BUILD_PREFIX)
+        }
+
+        private fun usesNothingOsInitialRecentsTransitionAidl(): Boolean {
+            return usesInitialAndroid16RecentsTransitionAidl()
+                    && Build.FINGERPRINT.startsWith("Nothing/")
+        }
 
         @JvmField val INSTANCE = DaggerSingletonObject(LauncherAppComponent::getSystemUiProxy)
 
