@@ -234,7 +234,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             data.writeStrongInterface(context.iApplicationThread)
             data.writeStrongInterface(listener)
             recentTasks.asBinder().transact(
-                if (usesNothingOsBaklavaInitialRecentsTransitionAidl()) {
+                if (usesNothingOs4BaklavaInitialRecentsTransitionAidl()) {
                     LC_TRANSACTION_startRecentsTransition_NothingOS_4_BaklavaInitial
                 } else {
                     LC_TRANSACTION_startRecentsTransition_AOSP_BaklavaInitial
@@ -1352,7 +1352,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             reply: Parcel?,
             flags: Int,
         ): Boolean {
-            if (usesNothingOsBaklavaInitialRecentsTransitionAidl()
+            if (usesNothingOs4BaklavaInitialRecentsTransitionAidl()
                     && code == LC_TRANSACTION_onAnimationStartWithSurfaceTransaction) {
                 // LC-Note: What even the fuck this is (this handles a Nothing OS 4 binder transaction)
                 data.enforceInterface(IRecentsAnimationRunner.DESCRIPTOR) // This can be mistaken for IRecentsAnimationController, keep it this way
@@ -1503,7 +1503,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
         }
 
         /** LC-Note: Should use Nothing OS 16.0 recents transition AIDL? */
-        private fun usesNothingOsBaklavaInitialRecentsTransitionAidl(): Boolean {
+        private fun usesNothingOs4BaklavaInitialRecentsTransitionAidl(): Boolean {
             return usesAOSPBaklavaInitialRecentsTransitionAidl()
                     && isNothingOs
         }
