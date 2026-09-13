@@ -1366,7 +1366,11 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
                 val minimizedHomeBounds = data.readTypedObject(Rect.CREATOR)
                 val extras = data.readTypedObject(Bundle.CREATOR)
                 data.enforceNoDataAvail()
-                transaction?.apply()
+                try {
+                    transaction?.apply()
+                } finally {
+                    transaction?.close()
+                }
                 onAnimationStart(
                     controller,
                     apps,
