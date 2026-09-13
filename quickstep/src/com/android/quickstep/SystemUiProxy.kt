@@ -54,12 +54,14 @@ import android.window.WindowContainerTransaction
 import androidx.annotation.MainThread
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
+import app.lawnchair.util.isAndroidBaklavaInitial
+import app.lawnchair.util.isNothingOs
 //import app.lawnchair.gestures.type.GestureType
 import com.android.internal.logging.InstanceId
 import com.android.internal.util.ScreenshotRequest
 import com.android.internal.view.AppearanceRegion
 import com.android.launcher3.Flags
-import com.android.launcher3.Utilities.ATLEAST_BAKLAVA
+import com.android.launcher3.Utilities
 import com.android.launcher3.dagger.ApplicationContext
 import com.android.launcher3.dagger.LauncherAppComponent
 import com.android.launcher3.dagger.LauncherAppSingleton
@@ -232,10 +234,10 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             data.writeStrongInterface(context.iApplicationThread)
             data.writeStrongInterface(listener)
             recentTasks.asBinder().transact(
-                if (usesNothingOsInitialRecentsTransitionAidl()) {
-                    TRANSACTION_START_RECENTS_TRANSITION_NOTHING_INITIAL
+                if (usesNothingOsBaklavaInitialRecentsTransitionAidl()) {
+                    LC_TRANSACTION_startRecentsTransition_NothingOS_4_BaklavaInitial
                 } else {
-                    TRANSACTION_START_RECENTS_TRANSITION_AOSP_INITIAL
+                    LC_TRANSACTION_startRecentsTransition_AOSP_BaklavaInitial
                 },
                 data,
                 null,
@@ -1140,7 +1142,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
 
     private fun shouldEnableRunningTasksForDesktopMode(): Boolean =
         DesktopModeStatus.canEnterDesktopMode(context) &&
-            if (ATLEAST_BAKLAVA) {
+            if (Utilities.ATLEAST_BAKLAVA) {
                 ENABLE_DESKTOP_WINDOWING_TASKBAR_RUNNING_APPS.isTrue
             } else {
                 false
@@ -1303,9 +1305,9 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
         displayId: Int,
     ): Boolean {
         executeWithErrorLog({ "Error starting recents via shell" }) {
-            if (usesInitialAndroid16RecentsTransitionAidl()) {
+            if (usesAOSPBaklavaInitialRecentsTransitionAidl()) {
                 if (wct != null) {
-                    Log.w(TAG, "Android 16 initial does not support WCT-backed recents transitions")
+                    Log.w("LC-SystemUiProxy", "Android 16 initial does not support WCT-backed recents transitions")
                     return false
                 }
                 val recentTasks = recentTasks ?: return false
@@ -1334,8 +1336,7 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
                 RecentsAnimationListenerStub(listener),
             )
                 ?: run {
-                    // LC-Ignored
-                    //ActiveGestureProtoLogProxy.logRecentTasksMissing()
+                    if (Utilities.ATLEAST_S) ActiveGestureProtoLogProxy.logRecentTasksMissing()
                     return false
                 }
             return true
@@ -1351,13 +1352,14 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
             reply: Parcel?,
             flags: Int,
         ): Boolean {
-            if (usesNothingOsInitialRecentsTransitionAidl()
-                    && code == TRANSACTION_ON_ANIMATION_START_WITH_SURFACE_TRANSACTION) {
-                data.enforceInterface(IRecentsAnimationRunner.DESCRIPTOR)
+            if (usesNothingOsBaklavaInitialRecentsTransitionAidl()
+                    && code == LC_TRANSACTION_onAnimationStartWithSurfaceTransaction) {
+                // LC-Note: What even the fuck this is (this handles a Nothing OS 4 binder transaction)
+                data.enforceInterface(IRecentsAnimationRunner.DESCRIPTOR) // This can be mistaken for IRecentsAnimationController, keep it this way
                 val controller = IRecentsAnimationController.Stub.asInterface(
                     data.readStrongBinder())
                 val transitionInfo = data.readTypedObject(TransitionInfo.CREATOR)
-                val transaction = data.readTypedObject(SurfaceControl.Transaction.CREATOR)
+                val transaction = data.readTypedObject(Transaction.CREATOR)
                 val apps = data.createTypedArray(RemoteAnimationTarget.CREATOR)
                 val wallpapers = data.createTypedArray(RemoteAnimationTarget.CREATOR)
                 val homeContentInsets = data.readTypedObject(Rect.CREATOR)
@@ -1480,22 +1482,30 @@ class SystemUiProxy @Inject constructor(@ApplicationContext private val context:
 
     companion object {
         private const val TAG = "SystemUiProxy"
-        private const val TRANSACTION_START_RECENTS_TRANSITION_AOSP_INITIAL =
-            IBinder.FIRST_CALL_TRANSACTION + 4
-        private const val TRANSACTION_START_RECENTS_TRANSITION_NOTHING_INITIAL =
-            IBinder.FIRST_CALL_TRANSACTION + 5
-        private const val TRANSACTION_ON_ANIMATION_START_WITH_SURFACE_TRANSACTION =
-            IBinder.FIRST_CALL_TRANSACTION + 4
-        private const val ANDROID_16_INITIAL_BUILD_PREFIX = "BP2A."
 
-        private fun usesInitialAndroid16RecentsTransitionAidl(): Boolean {
+        /** LC-Note: Android 16.0 start recents transition binder code */
+        private const val LC_TRANSACTION_startRecentsTransition_AOSP_BaklavaInitial =
+            IBinder.FIRST_CALL_TRANSACTION + 4
+
+        /** LC-Note: Android 16.0, Nothing OS 4.0 start recents transition binder code whose value
+         * is higher than AOSP 16.0 or [LC_TRANSACTION_startRecentsTransition_AOSP_BaklavaInitial] */
+        private const val LC_TRANSACTION_startRecentsTransition_NothingOS_4_BaklavaInitial =
+            IBinder.FIRST_CALL_TRANSACTION + 5
+
+        /** LC-Note: onAnimationStartWithSurfaceTransac binder code */
+        private const val LC_TRANSACTION_onAnimationStartWithSurfaceTransaction =
+            IBinder.FIRST_CALL_TRANSACTION + 4
+
+        /** LC-Note: Should use AOSP 16.0 recents transition AIDL? */
+        private fun usesAOSPBaklavaInitialRecentsTransitionAidl(): Boolean {
             return Build.VERSION.SDK_INT == Build.VERSION_CODES.BAKLAVA
-                    && Build.FINGERPRINT.contains(ANDROID_16_INITIAL_BUILD_PREFIX)
+                    && isAndroidBaklavaInitial
         }
 
-        private fun usesNothingOsInitialRecentsTransitionAidl(): Boolean {
-            return usesInitialAndroid16RecentsTransitionAidl()
-                    && Build.FINGERPRINT.startsWith("Nothing/")
+        /** LC-Note: Should use Nothing OS 16.0 recents transition AIDL? */
+        private fun usesNothingOsBaklavaInitialRecentsTransitionAidl(): Boolean {
+            return usesAOSPBaklavaInitialRecentsTransitionAidl()
+                    && isNothingOs
         }
 
         @JvmField val INSTANCE = DaggerSingletonObject(LauncherAppComponent::getSystemUiProxy)
