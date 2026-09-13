@@ -1691,7 +1691,7 @@ public abstract class AbsSwipeUpHandler<
 
             boolean enableDesktopWindowingPipCompat = false;
             // Literal int because https://github.com/LawnchairLauncher/lawnchair/issues/6817
-            if (Build.VERSION.SDK_INT_FULL >= 3600001) {
+            if (Build.VERSION.SDK_INT >= 36 && Build.VERSION.SDK_INT_FULL >= 3600001) {
                 try {
                     enableDesktopWindowingPipCompat = DesktopExperienceFlags.ENABLE_DESKTOP_WINDOWING_PIP.isTrue();
                 } catch (Exception e) {
